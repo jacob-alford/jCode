@@ -1,5 +1,6 @@
 # jCode
 A unique discord bot that acts like MatLab or R with commands like `help()`
+![jCode Logo](jCodeLogo.jpg)
 ## Features
 * Custom explicit commands written in Javascript.
 * Custom implicit (just text) commands stored in a database.
