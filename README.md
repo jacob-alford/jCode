@@ -73,7 +73,7 @@ Parameter | Description
 `name` | The name of the argument.
 `desc` | The description of the argument.
 `required` | Boolean value which indicates if the arument is a required one.  Must correpsond to `requiredArgs` array above.
-`type` | Specifies the type expected for the argument.  If an optional argument, then `undefined` must also be specified.  Commas or anything other delimiter are sufficient.  I like commas.
+`type` | Specifies the type expected for the argument.  If an optional argument, then `undefined` must also be specified.  Commas or any other delimiter are sufficient.  I like commas.
 
 ## MySQL
 This Discord bot confers with a MySQL server.  And it is required.  My configuration for it is below, though you are free to adapt to your needs.
