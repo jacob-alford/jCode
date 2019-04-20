@@ -10,21 +10,13 @@ const pmChar = "_";
 let firstTime = true;
 
 // MySQL
-let usersSQL = mysql.createConnection({
-  host: "[---MySQL Host Goes Here---]",
-  user: "[---MySQL Username Goes Here---]",
-  password: "[---MySQL Password Goes Here---]",
-  database:'[---MySQL Selected Database---]',
+let poolSQL = mysql.createPool({
+  host: "--MySQL Host--",
+  user: "--MySQL Username--",
+  password: "--MySQL Password--",
+  database:'--MySQL Database--',
   charset:'utf8mb4'
 });
-let impSQL = mysql.createConnection({
-  host: "[---MySQL Host Goes Here---]",
-  user: "[---MySQL Username Goes Here---]",
-  password: "[---MySQL Password Goes Here---]",
-  database:'[---MySQL Selected Database---]',
-  charset:'utf8mb4'
-});
-
 // Useful to minimize calls to the MySQL server
 let userCache = {};
 
@@ -168,22 +160,21 @@ const setName = (name,activity) => {
 }
 const changePerms = (msg,username,id,newPerm) => {
   if(newPerm <= 8){
-    let query = `UPDATE \`discord_users\` SET \`int_perms\` = '${newPerm}' WHERE \`disc_username\` = '${username}' AND \`disc_id\` = '${id}'`;
     if(userCache[`${username}#${id}`] !== undefined){
-      try{
-        usersSQL.query(query, (err,result,fields) => {
-          if(err) throw err;
-          userCache[`${username}#${id}`].intPermLevel = newPerm;
-          try{
-            send("Permissions updated successfully!",msg);
-          }catch(err){
-              console.error(err);
+      poolSQL.getConnection((err, connection) => {
+        if (err) console.error(err);
+        let query = `UPDATE \`discord_users\` SET \`int_perms\` = '${newPerm}' WHERE \`disc_username\` = '${username}' AND \`disc_id\` = '${id}'`;
+        connection.query(query, function (error, result, fields) {
+          if (error){
+            console.error(error);
+            send("There was a problem connecting to the database!",msg);
           }
+          userCache[`${username}#${id}`].intPermLevel = newPerm;
+          send("Permissions updated successfully!",msg);
+          connection.release();
         });
-      }catch(errorButt20){
-        console.error(errorButt20);
-        return "Unable to set permissions, there was an error.";
-      }
+      });
+      return `Changing ${username}'s permissions to ${newPerm}...`;
     }else{
       return "That username/id combination isn't recognized.";
     }
@@ -199,24 +190,19 @@ const perms = (msg,username = msg.author.username,id=msg.author.discriminator) =
   }
 }
 const addImp = (msg,cmdName,text) => {
-  if(firstTime){
-    impSQL.connect((err) => {
-      if(err) throw err;
-      let query = `INSERT INTO \`imp_commands\`(\`name\`, \`value\`, \`author\`) VALUES ('${cmdName}','${text}','${msg.author.username}')`;
-      impSQL.query(query, (err,result,fields) => {
-        if(err) throw err;
-        send(`Command added successfully!`,msg);
-      });
-    });
-    firstTime = false;
-  }else{
-    let query = `INSERT INTO \`imp_commands\`(\`name\`, \`value\`, \`author\`) VALUES ('${cmdName}','${text}','${message.author.username}')`;
-    impSQL.query(query, (err,result,fields) => {
-      if(err) throw err;
+  poolSQL.getConnection((err, connection) => {
+    if (err) console.error(err);
+    let query = `INSERT INTO \`imp_commands\`(\`name\`, \`value\`, \`author\`) VALUES ('${cmdName}','${text}','${msg.author.username}')`;
+    connection.query(query, function (error, result, fields) {
+      if (error){
+        console.error(error);
+        send("Unable to add command!  There was an error in the database!",msg);
+      }
       send(`Command added successfully!`,msg);
+      connection.release();
     });
-  }
-  return "Adding command...";
+  });
+  return `Adding Command '${cmdName}'...`;
 }
 const simpInterest = (principle,APR,duration) => `A $${commas(principle)} loan, at ${(APR/100).toFixed(4)}% interest for ${duration} years:\n**Total Balance:** __$${commas(principle*(1+(APR/12)*duration))}__\n**Total Accumulated Interest:** __$${commas(principle*(1+(APR/12)*duration)-principle)}__`;
 const compInterest = (principle,APR,duration,compFreq) => `A $${commas(principle)} compound interest balance, at ${APR}% interest for ${duration} years, compounded ${compFreq} times per year:\n**Total Balance:** __$${commas((principle*Math.pow(1+(APR/100)/compFreq,compFreq*duration)).toFixed(2))}__\n**Total Accumulated Interest:** __$${commas((principle*Math.pow(1+(APR/100)/compFreq,compFreq*duration)-principle).toFixed(2))}__`;
@@ -289,7 +275,48 @@ const atan = num => Math.atan(num);
 const pi = () => Math.PI;
 const exp = num => Math.exp(num);
 const ln = num => Math.log(num);
-
+const rUniInt = (msg,min,max) => {
+  if(min >= max || max-min<2 || min <= 0 ) return `A few requirements: 'min' must be less than 'max,' their difference must be at least two, and 'min' must not be negative or zero.`;
+  crypto.randomBytes(8, (err,buf) => {
+    if(err) console.error(err);
+    let bigNum = parseInt(buf.toString('hex'),16);
+    let randomNum = bigNum%max + min;
+    send(randomNum,msg);
+  });
+  return `Generating...`;
+}
+const rUni = (msg,min=0,max=1) => {
+  if(min >= max  || max <= 0 || min < 0) return `A few requirements: 'min' must be less than 'max,' and both 'min' and 'max' must not be negative.  Max cannot be zero. Default: min = 0, max = 1.`;
+  crypto.randomBytes(8, (err,buf) => {
+    if(err) console.error(err);
+    let bigNum = parseInt(buf.toString('hex'),16)/281474976710655;
+    let randomNum = bigNum%max + min;
+    send(randomNum,msg);
+  });
+  return `Generating...`;
+}
+const rExp = (msg,lambda) => {
+  crypto.randomBytes(8, (err,buf) => {
+    if(err) console.error(err);
+    let randDeci = parseInt(buf.toString('hex'),16)/18446744073709551615;
+    let randomExp = Math.log(1-randDeci)/(-1*lambda);
+    send(randomExp,msg);
+  });
+  return `Generating...`;
+}
+const rNorm = (msg,mu=0,sigma=1) => {
+  crypto.randomBytes(8, (err,buf) => {
+    if(err) console.error(err);
+    let randDeci1 = parseInt(buf.toString('hex'),16)/18446744073709551615;
+    crypto.randomBytes(8,(err2,buf2) => {
+      if(err2) console.error(err2);
+      let randDeci2 = parseInt(buf2.toString('hex'),16)/18446744073709551615;
+      let randomExp = Math.sqrt(-2*Math.log(randDeci1))*Math.cos(2*Math.PI*randDeci2);
+      send(randomExp*sigma + mu,msg);
+    });
+  });
+  return `Generating...`;
+}
 // The index object stores functions,
 // their permission levels,
 // descriptions,
@@ -480,6 +507,57 @@ const index = {
     requiredArgs:[0],
     args:[
       {name:"N?",desc:"The number of bytes to generate. Default: 1.",required:false,type:"integer,undefined"}
+    ]
+  },
+  "rUniInt":{
+    execute:rUniInt,
+    category:"Crypto",
+    permLvl:1,
+    desc:"Generates a uniformly distributed random integer between 'min' and 'max.'",
+    requiresMSG:true,
+    maxArgs:2,
+    requiredArgs:[1,1],
+    args:[
+      {name:"min",desc:"The smallest number the random number could be.",required:true,type:"integer"},
+      {name:"max",desc:"The largest number the random number could be.",required:true,type:"integer"}
+    ]
+  },
+  "rUni":{
+    execute:rUni,
+    category:"Crypto",
+    permLvl:1,
+    desc:"Generates a uniformly distributed random number between 'min' and 'max.'",
+    requiresMSG:true,
+    maxArgs:2,
+    requiredArgs:[0,0],
+    args:[
+      {name:"min",desc:"The smallest number the random number could be. Default: 0",required:false,type:"integer,undefined"},
+      {name:"max",desc:"The largest number the random number could be.  Default: 1",required:false,type:"integer,undefined"}
+    ]
+  },
+  "rExp":{
+    execute:rExp,
+    category:"Crypto",
+    permLvl:1,
+    desc:"Generates an exponentially distributed random number with rate parameter lambda.",
+    requiresMSG:true,
+    maxArgs:1,
+    requiredArgs:[1],
+    args:[
+      {name:"rate",desc:"The rate of the exponential distribution.",required:true,type:"integer,number"}
+    ]
+  },
+  "rNorm":{
+    execute:rExp,
+    category:"Crypto",
+    permLvl:1,
+    desc:"Generates an normally distributed random number with mean mu and standard deviation sigma.",
+    requiresMSG:true,
+    maxArgs:2,
+    requiredArgs:[0,0],
+    args:[
+      {name:"mu",desc:"The mean of the normal distribution.  Default: 0",required:false,type:"integer,undefined,number"},
+      {name:"sigma",desc:"The standard deviation of the normal distribution.  Default: 1",required:false,type:"integer,undefined,number"}
     ]
   },
   "mean":{
@@ -770,26 +848,11 @@ const parseType = str => {
 
 // --- [MySQL] ---
 const impGet = (cmdName,msg,pmOrQ = false) => {
-  if(firstTime){
-    impSQL.connect((err) => {
-      if(err) throw err;
-      let query = `SELECT \`value\` FROM \`imp_commands\` WHERE \`name\`='${cmdName}'`;
-      impSQL.query(query, (err,result,fields) => {
-        if(err) throw err;
-        if(pmOrQ == "pm"){
-          if(result.length != 0) sendPM(result[0].value,msg);
-        }else if(pmOrQ == "q"){
-          if(result.length != 0) send(`This command comes with no instructions, but it told me to tell you this:\n${result[0].value}`,msg);
-        }else{
-          if(result.length != 0) send(result[0].value,msg);
-        }
-      });
-    });
-    firstTime = false;
-  }else{
+  poolSQL.getConnection((err, connection) => {
+    if (err) console.error(err);
     let query = `SELECT \`value\` FROM \`imp_commands\` WHERE \`name\`='${cmdName}'`;
-    impSQL.query(query, (err,result,fields) => {
-      if(err) throw err;
+    connection.query(query, function (error, result, fields) {
+      if (error) console.error(error);
       if(pmOrQ == "pm"){
         if(result.length != 0) sendPM(result[0].value,msg);
       }else if(pmOrQ == "q"){
@@ -797,17 +860,17 @@ const impGet = (cmdName,msg,pmOrQ = false) => {
       }else{
         if(result.length != 0) send(result[0].value,msg);
       }
+      connection.release();
     });
-  }
-
+  });
 }
 const updateUsers = () => {
-  usersSQL.connect((err69) => {
-    if(err69) throw err69;
+  poolSQL.getConnection((err, connection) => {
+    if (err) console.error(err);
     let query = 'SELECT * FROM `discord_users`';
-    usersSQL.query(query, (err,result,fields) => {
-      if(err) throw err;
-      result.forEach(c => {
+    connection.query(query, function (error, results, fields) {
+      if (error) console.error(error);
+      results.forEach(c => {
         if(userCache[`${c.disc_username}#${c.disc_id}`] === undefined){
           userCache[`${c.disc_username}#${c.disc_id}`] = {
             intPermLevel:c.int_perms,
@@ -815,36 +878,57 @@ const updateUsers = () => {
           }
         }
       });
+      connection.release();
     });
   });
 }
 const addToDBUser = (user,id,perms,nickname) => {
-  let query = `INSERT INTO \`discord_users\` (\`int_id\`,\`disc_username\`,\`disc_id\`,\`int_perms\`,\`int_nickname\`) VALUES ('${Object.keys(userCache).length+1}','${user}','${id}','${perms}','${nickname}')`;
-  usersSQL.query(query, (err,result,fields) => {
-    if(err) throw err;
-    console.log(result);
+  poolSQL.getConnection((err, connection) => {
+    if (err) console.error(err);
+    let query = `INSERT INTO \`discord_users\` (\`int_id\`,\`disc_username\`,\`disc_id\`,\`int_perms\`,\`int_nickname\`) VALUES ('${Object.keys(userCache).length+1}','${user}','${id}','${perms}','${nickname}')`;
+    connection.query(query, function (error, result, fields) {
+      if (error) console.error(error);
+      console.log(result);
+      connection.release();
+    });
   });
 }
 
 // --- [Discord Functions] ---
 const send = (str,msg) => {
   if(str != "" && !Array.isArray(str)){
-    msg.channel.send(str);
+    try{
+      msg.channel.send(str);
+    }catch(error){
+      console.error(`There was a problem sending the following message: ${str}`);
+    }
   }else if(Array.isArray(str) && str != ""){
     str.forEach(c => {
-      msg.channel.send(c);
+      try{
+        msg.channel.send(c);
+      }catch(err){
+        console.error(`There was a problem sending the following message: ${c}`)
+      }
     });
   }
 }
 const sendPM = (str,msg) =>  {
   if(str != "" && !Array.isArray(str)){
     msg.author.createDM().then(channel => {
-      channel.send(str);
+      try{
+        channel.send(str);
+      }catch(error){
+        console.error(`There was an error sending the following private message: ${str}`);
+      }
     });
   }else if(Array.isArray(str) && str != ""){
     str.forEach(c => {
       msg.author.createDM().then(channel => {
-        channel.send(c);
+        try{
+          channel.send(c);
+        }catch(error){
+          console.error(`There was an error sending the following private message: ${c}`);
+        }
       });
     });
   }
@@ -1027,4 +1111,4 @@ jBot.on("message", msg => {
 });
 
 jBot.on('error', console.error);
-jBot.login('[---Bot Login Token Goes Here---]');
+jBot.login('--Token-Goes-Here--');
