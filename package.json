@@ -1,0 +1,16 @@
+{
+  "name": "jCode",
+  "version": "1.0.0",
+  "description": "a discord bot",
+  "main": "index.js",
+  "repository": "https://github.com/jacob-alford/jCode.git",
+  "author": "Jacob Alford <jacob.alford@me.com>",
+  "license": "MIT",
+  "dependencies": {
+    "crypto": "^1.0.1",
+    "discord.js": "^12.0.2"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}
